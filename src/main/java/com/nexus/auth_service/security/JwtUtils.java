@@ -1,7 +1,6 @@
 package com.nexus.auth_service.security;
 
 import io.jsonwebtoken.*;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,22 +11,24 @@ import org.springframework.stereotype.Component;
 
 import java.security.Key;
 import java.util.Date;
+import java.nio.charset.StandardCharsets;
 
 @Component
 public class JwtUtils {
     private static final Logger logger = LoggerFactory.getLogger(JwtUtils.class);
 
-    // application.properties içinden okunacak değerler
     @Value("${nexus.app.jwtSecret}")
     private String jwtSecret;
 
     @Value("${nexus.app.jwtExpirationMs}")
     private int jwtExpirationMs;
 
-    // Token Oluşturma (Generate)
+    private Key key() {
+        return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+    }
+
     public String generateJwtToken(Authentication authentication) {
         UserDetails userPrincipal = (UserDetails) authentication.getPrincipal();
-
         return Jwts.builder()
                 .setSubject((userPrincipal.getUsername()))
                 .setIssuedAt(new Date())
@@ -36,17 +37,15 @@ public class JwtUtils {
                 .compact();
     }
 
-    private Key key() {
-        return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
-    }
-
-    // Token içinden Kullanıcı Adını Alma
     public String getUserNameFromJwtToken(String token) {
-        return Jwts.parserBuilder().setSigningKey(key()).build()
-                .parseClaimsJws(token).getBody().getSubject();
+        return Jwts.parserBuilder()
+                .setSigningKey(key())
+                .build()
+                .parseClaimsJws(token)
+                .getBody()
+                .getSubject();
     }
 
-    // Kullanıcı Adından Yeni Token Oluşturma
     public String generateTokenFromUsername(String username) {
         return Jwts.builder()
                 .setSubject(username)
@@ -56,19 +55,18 @@ public class JwtUtils {
                 .compact();
     }
 
-    // Token Doğrulama (Validate)
     public boolean validateJwtToken(String authToken) {
         try {
             Jwts.parserBuilder().setSigningKey(key()).build().parse(authToken);
             return true;
+        } catch (SignatureException e) {
+            logger.error("İmza uyuşmuyor: {}", e.getMessage());
         } catch (MalformedJwtException e) {
             logger.error("Geçersiz JWT token: {}", e.getMessage());
         } catch (ExpiredJwtException e) {
             logger.error("JWT token süresi dolmuş: {}", e.getMessage());
-        } catch (UnsupportedJwtException e) {
-            logger.error("JWT token desteklenmiyor: {}", e.getMessage());
-        } catch (IllegalArgumentException e) {
-            logger.error("JWT claims string boş: {}", e.getMessage());
+        } catch (Exception e) {
+            logger.error("JWT doğrulanırken hata: {}", e.getMessage());
         }
         return false;
     }

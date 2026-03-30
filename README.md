@@ -1,134 +1,124 @@
 # 🛡️ Nexus Auth Service  
-**Spring Boot 3 + JWT ile Stateless Authentication & Authorization Servisi**
+**Spring Boot 3.x + JWT + Refresh Token + Blacklist Mechanism**
 
-Nexus Auth Service, modern mikroservis mimarilerine uygun olarak geliştirilmiş, stateless (durumsuz) çalışan bir kimlik doğrulama ve yetkilendirme servisidir.  
-Spring Security ve JWT tabanlı bu yapı sayesinde, ölçeklenebilir ve güvenli bir authentication mekanizması sunar.
+Nexus Auth Service; modern, güvenli ve stateless (durumsuz) bir kimlik doğrulama servisidir.  
+Standart JWT mekanizmasının ötesine geçerek, **Refresh Token** ve **Logout (Blacklist)** özellikleriyle tam donanımlı bir güvenlik katmanı sunar.
 
 ---
 
 ## 🚀 Öne Çıkan Özellikler
 
-- Spring Security 6.x – Güncel güvenlik filtre zinciri
-- JWT (JSON Web Token) – Stateless authentication
-- Role-Based Access Control (RBAC) – ROLE_USER, ROLE_MODERATOR, ROLE_ADMIN
-- BCrypt Password Hashing – Şifreler hashlenir, plaintext tutulmaz
-- H2 File-Based Database – Kalıcı veri saklama
+- **Spring Security 6.x** – Güncel güvenlik filtre zinciri yapılandırması  
+- **Stateless JWT Authentication** – Session bağımlılığı olmadan ölçeklenebilir yapı  
+- **Refresh Token Sistemi** – Access token süresi dolduğunda tekrar login olmadan oturum yenileme  
+- **Blacklist Logout Mekanizması** – Logout sonrası token anında geçersiz hale getirilir  
+- **Role-Based Access Control (RBAC)** – `ROLE_USER`, `ROLE_MODERATOR`, `ROLE_ADMIN`  
+- **BCrypt Password Hashing** – Güvenli şifre saklama  
+- **H2 Persistent Database** – Dosya tabanlı kalıcı veri saklama  
 
 ---
 
-## 🛠️ Kullanılan Teknolojiler
+## 🛠️ Teknolojiler ve Mimari
 
 | Katman | Teknoloji |
 |-------|----------|
-| Backend | Java 17, Spring Boot 3.x |
-| Security | Spring Security, JJWT |
-| Database | H2 Database, Spring Data JPA |
-| Build Tool | Maven |
-| Testing | Postman |
+| Dil & Framework | Java 17, Spring Boot 3.x |
+| Güvenlik | Spring Security, JJWT (io.jsonwebtoken) |
+| Veritabanı | H2 Database (File Mode), Spring Data JPA |
+| Mimari Pattern | Controller → Service → Repository → Security Filter Chain |
+| Araçlar | Maven, Postman, Git |
 
 ---
 
 ## 📡 API Endpoints
 
+### 🔐 Kimlik Yönetimi
+
 | Method | Endpoint | Açıklama | Yetki |
 |--------|---------|----------|-------|
-| POST | /api/v1/auth/signup | Yeni kullanıcı oluşturur | Public |
-| POST | /api/v1/auth/signin | Giriş yapar, JWT döner | Public |
-| GET  | /api/v1/test/all   | Herkese açık | Public |
-| GET  | /api/v1/test/user  | Kullanıcı içeriği | ROLE_USER, ROLE_ADMIN |
-| GET  | /api/v1/test/mod   | Moderatör içeriği | ROLE_MODERATOR |
-| GET  | /api/v1/test/admin | Admin içeriği | ROLE_ADMIN |
+| POST | `/api/v1/auth/signup` | Yeni kullanıcı kaydı oluşturur | Public |
+| POST | `/api/v1/auth/signin` | Access & Refresh Token döner | Public |
+| POST | `/api/v1/auth/refreshtoken` | Yeni access token üretir | Public |
+| POST | `/api/v1/auth/logout` | Token blacklist'e alınır | Authenticated |
 
 ---
 
-## 🏗️ Mimari
+### 🧪 Test Endpoints
 
-Controller → Service → Repository → Database
-
-- Controller: Request/Response yönetimi
-- Service: Business logic
-- Repository: Data access
-- Security: JWT filter + Spring Security
-
----
-
-## ⚙️ Kurulum ve Çalıştırma
-
-git clone https://github.com/huseyinceykel/nexus-auth-service.git  
-cd nexus-auth-service  
-./mvnw spring-boot:run  
-
-Uygulama:  
-http://localhost:8080  
+| Method | Endpoint | Açıklama | Gerekli Rol |
+|--------|---------|----------|------------|
+| GET | `/api/v1/test/user` | Kullanıcı içeriği | ROLE_USER, ROLE_ADMIN |
+| GET | `/api/v1/test/mod` | Moderatör içeriği | ROLE_MODERATOR |
+| GET | `/api/v1/test/admin` | Admin içeriği | ROLE_ADMIN |
 
 ---
 
-## 🧪 Test (Postman)
+## 🏗️ Güvenlik Akışı (Security Workflow)
 
-### Signup
-POST /api/v1/auth/signup
+1. Kullanıcı `/signin` ile giriş yapar  
+2. Sunucu:
+   - kısa ömürlü **accessToken**
+   - uzun ömürlü **refreshToken** üretir  
+3. Client, her request’te:
+   ```
+   Authorization: Bearer <accessToken>
+   ```
+   gönderir  
+4. `AuthTokenFilter`:
+   - token doğrular  
+   - blacklist kontrolü yapar  
+5. Token süresi dolarsa:
+   - `/refreshtoken` ile yeni token alınır  
+6. Logout durumunda:
+   - token blacklist’e eklenir  
+   - artık geçersiz olur (401 Unauthorized)  
 
-{
-  "username": "testuser",
-  "email": "test@mail.com",
-  "password": "123456"
-}
+---
 
-### Signin
-POST /api/v1/auth/signin
+## ⚙️ Kurulum
 
-{
-  "username": "testuser",
-  "password": "123456"
-}
+```bash
+# Projeyi klonla
+git clone https://github.com/huseyinceykel/nexus-auth-service.git
 
-Response:
+# Klasöre gir
+cd nexus-auth-service
 
-{
-  "accessToken": "JWT_TOKEN",
-  "tokenType": "Bearer"
-}
+# Uygulamayı başlat
+./mvnw spring-boot:run
+```
 
-### Protected Request
-
-Authorization: Bearer <JWT_TOKEN>
-
-GET /api/v1/test/user
+Uygulama:
+```
+http://localhost:8080
+```
 
 ---
 
 ## 📊 H2 Console
 
-URL: http://localhost:8080/h2-console  
-JDBC: jdbc:h2:file:./data/nexusauthdb  
-Username: sa  
-Password: password  
+Uygulama çalışırken veritabanını inceleyebilirsiniz:
+
+- URL: http://localhost:8080/h2-console  
+- JDBC URL: `jdbc:h2:file:./data/nexusauthdb`  
+- Username: `sa`  
+- Password: `password`  
 
 ---
 
-## 🔐 JWT Flow
+## 👨‍💻 Geliştirici
 
-1. Kullanıcı login olur  
-2. JWT üretilir  
-3. Client token saklar  
-4. Request ile gönderir  
-5. Token doğrulanır  
-6. Role kontrolü yapılır  
+**Hüseyin Eren Çeykel**  
+Computer Engineer & Backend Developer  
+
+- LinkedIn: www.linkedin.com/in/huseyinerenceykel
+            
 
 ---
 
 ## 📌 Notlar
 
-- Stateless yapı (session yok)
-- Token süresi ayarlanabilir
-- RBAC genişletilebilir
-- Refresh Token eklenebilir
-
----
-
-## 👨‍💻 Developer
-
-Hüseyin Eren Çeykel  
-Backend Developer (Spring Boot & Java)
-
----
+- Stateless mimari (session yok)  
+- Token expiration yapılandırılabilir  
+- Refresh token rotation eklenebilir  
+- Production için Redis blacklist önerilir  

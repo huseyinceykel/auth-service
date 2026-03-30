@@ -15,7 +15,6 @@ import java.util.UUID;
 
 @Service
 public class RefreshTokenService {
-    // application.properties dosyasından süreyi çeker
     @Value("${nexus.app.jwtRefreshExpirationMs}")
     private Long refreshTokenDurationMs;
 
@@ -29,19 +28,15 @@ public class RefreshTokenService {
         return refreshTokenRepository.findByToken(token);
     }
 
-    // Yeni bir Refresh Token üretir ve veritabanına kaydeder
     @Transactional
     public RefreshToken createRefreshToken(Long userId) {
-        // Kullanıcıya ait eski bir token var mı? Varsa siliyoruz.
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı: " + userId));
 
         refreshTokenRepository.deleteByUser(user);
 
-        // İşlemlerin veritabanına hemen yansıması için flush gerekebilir
         refreshTokenRepository.flush();
 
-        // Yeni token'ı oluşturma.
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
         refreshToken.setExpiryDate(Instant.now().plusMillis(refreshTokenDurationMs));
@@ -50,7 +45,6 @@ public class RefreshTokenService {
         return refreshTokenRepository.save(refreshToken);
     }
 
-    // Token'ın süresinin dolup dolmadığını kontrol eder
     public RefreshToken verifyExpiration(RefreshToken token) {
         if (token.getExpiryDate().compareTo(Instant.now()) < 0) {
             refreshTokenRepository.delete(token);

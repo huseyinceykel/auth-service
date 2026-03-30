@@ -5,6 +5,7 @@ import com.nexus.auth_service.entity.RefreshToken;
 import com.nexus.auth_service.security.JwtUtils;
 import com.nexus.auth_service.service.RefreshTokenService;
 import com.nexus.auth_service.service.AuthService;
+import com.nexus.auth_service.service.BlacklistService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,24 +18,23 @@ public class AuthController {
     private final AuthService authService;
     private final RefreshTokenService refreshTokenService;
     private final JwtUtils jwtUtils;
+    private final BlacklistService blacklistService;
 
-    public AuthController(AuthService authService, RefreshTokenService refreshTokenService, JwtUtils jwtUtils) {
+    public AuthController(AuthService authService,
+                          RefreshTokenService refreshTokenService,
+                          JwtUtils jwtUtils,
+                          BlacklistService blacklistService) {
         this.authService = authService;
         this.refreshTokenService = refreshTokenService;
         this.jwtUtils = jwtUtils;
+        this.blacklistService = blacklistService;
     }
 
     @PostMapping("/signin")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        // Kullanıcıyı doğrula ve Access Token al
         JwtResponse jwtResponse = authService.authenticateUser(loginRequest);
-
-        // Bu kullanıcı için bir Refresh Token üret
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(jwtResponse.getId());
-
-        // JwtResponse içine refresh token'ı setle
         jwtResponse.setRefreshToken(refreshToken.getToken());
-
         return ResponseEntity.ok(jwtResponse);
     }
 
@@ -52,10 +52,19 @@ public class AuthController {
                 .map(refreshTokenService::verifyExpiration)
                 .map(RefreshToken::getUser)
                 .map(user -> {
-                    // Kullanıcı adına göre yeni bir Access Token üret
                     String token = jwtUtils.generateTokenFromUsername(user.getUsername());
                     return ResponseEntity.ok(new TokenRefreshResponse(token, requestRefreshToken));
                 })
                 .orElseThrow(() -> new RuntimeException("Refresh token is not in database!"));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logoutUser(@RequestHeader("Authorization") String authHeader) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            blacklistService.addTokenToBlacklist(token);
+            return ResponseEntity.ok("Başarıyla çıkış yapıldı ve token kara listeye alındı!");
+        }
+        return ResponseEntity.badRequest().body("Geçersiz Authorization header!");
     }
 }

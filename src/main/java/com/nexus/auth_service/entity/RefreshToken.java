@@ -19,11 +19,9 @@ public class RefreshToken {
     @Column(nullable = false)
     private Instant expiryDate;
 
-    // Boş Constructor (Hibernate için gerekli)
     public RefreshToken() {
     }
 
-    // Getter ve Setter Metotları
     public long getId() {
         return id;
     }

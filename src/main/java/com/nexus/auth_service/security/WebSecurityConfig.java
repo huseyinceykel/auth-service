@@ -1,5 +1,7 @@
 package com.nexus.auth_service.security;
 
+import com.nexus.auth_service.security.UserDetailsServiceImpl;
+import com.nexus.auth_service.service.BlacklistService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -24,8 +26,10 @@ public class WebSecurityConfig {
     }
 
     @Bean
-    public AuthTokenFilter authenticationJwtTokenFilter() {
-        return new AuthTokenFilter();
+    public AuthTokenFilter authenticationJwtTokenFilter(JwtUtils jwtUtils,
+                                                        UserDetailsServiceImpl userDetailsService,
+                                                        BlacklistService blacklistService) {
+        return new AuthTokenFilter(jwtUtils, userDetailsService, blacklistService);
     }
 
     @Bean
@@ -49,22 +53,23 @@ public class WebSecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http.csrf(csrf -> csrf.disable()) // Stateless JWT kullandığımız için CSRF'i kapatıyoruz
+    public SecurityFilterChain filterChain(HttpSecurity http,
+                                           JwtUtils jwtUtils,
+                                           UserDetailsServiceImpl userDetailsService,
+                                           BlacklistService blacklistService) throws Exception { // Parametreleri buraya ekledik
+        http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth ->
-                        auth.requestMatchers("/api/v1/auth/**").permitAll() // Kayıt ve Giriş herkese açık
-                                .requestMatchers("/h2-console/**").permitAll() // Veritabanı arayüzü açık
-                                .anyRequest().authenticated() // Geri kalan her şey TOKEN gerektirir
+                        auth.requestMatchers("/api/v1/auth/**").permitAll()
+                                .requestMatchers("/h2-console/**").permitAll()
+                                .anyRequest().authenticated()
                 );
 
-        // H2 Console'un frame içinde açılabilmesi için
         http.headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));
-
         http.authenticationProvider(authenticationProvider());
 
-        // Kendi yazdığımız JWT filtresini standart UsernamePassword filtresinden önceye koyuyoruz
-        http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(authenticationJwtTokenFilter(jwtUtils, userDetailsService, blacklistService),
+                UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
