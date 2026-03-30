@@ -10,7 +10,6 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
 
-    // BURAYI EKLE: Filtreleme sırasında username ile arama yapabilmek için şart
     Optional<User> findByUsername(String username);
 
     Boolean existsByUsername(String username);
